@@ -709,9 +709,10 @@ sudo iotop -C 5 2   # falls installiert; sonst `fs_usage`
 
 - **v0.1** (2026-07-04) — Initial Cut, basierend auf OpenCode-Session beim User `Delqhi`. 47 Bloat-Categories, 4 Profile, 12 Scripts.
 - **v0.2** (2026-07-04) — Added §15–§21 (Hidden-Apple-Subsystems, SavedState, Logs, pmset, Personal-Apps). Added script `08-deep-cleanup.sh`.
-- TODO v0.3: mas-cli integration
-- TODO v0.4: Valve Steam auto-prune
-- TODO v0.5: Profile-Test-Suite
+- **v0.3** (2026-07-04) — Added §23 (pmset im Detail + iPhone-Hotspot-Check), §24 (6 Specialty-Caches: PDF/OCR, AirPort, Mail-Plugins, Thunderbolt/eGPU, FCP, Minecraft). Added script `09-specialty-cleanup.sh`.
+- TODO v0.4: mas-cli integration
+- TODO v0.5: Valve Steam auto-prune
+- TODO v0.6: Profile-Test-Suite
 
 ---
 
