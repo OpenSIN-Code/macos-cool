@@ -1,46 +1,41 @@
 # macOS-cool — Skill für opencode / claude-code
 
-> **Fork my Mac from Apple bloat.** Der Skill-Agent erkennt, katalogisiert und entschärft:
+> **Fork my Mac from Apple bloat.** Der Skill-Agent erkennt, katalogisiert und entschärft macOS-Bloat in 7 Klassen mit Bestätigungs-Wizard und 4 User-Profilen.
 >
-> - Apple-System-Cruft (Spotlight, photoanalysisd, Time Machine, Telemetry)
-> - Drittanbieter-Update-Agenten (Adobe ARM, Google Keystone, Microsoft AutoUpdater, JetBrains)
-> - Antivirus-Bloat (TotalAV, Avast, Norton)
-> - Crypto / Miner-Stubs (Grass, IP Royal)
-> - Dev-Caches (npm, pnpm, yarn, pip, cargo, Maven, Playwright)
-> - Browser-Cache (Chrome Caches / Profile-Inventur)
+> **Umfang v0.3:** ~50 KB SKILL.md (25 Sektionen), 9 Shell-Skripte, MIT-Lizenz. Stand: macOS 26.5.1.
 
-## Profile
+## Was deckt der Skill ab?
 
-Der Skill unterstützt 4 Profile (vom Agent zu Beginn ausgewählt):
-
-- `developer-minimal` — nur Browser + 1 Editor + Terminal.
-- `developer` — Browser + IDE + Dev-Tools. Apple-Bloat + Update-Agents weg.
-- `power-user` — offensichtlicher Müll weg, Services je nach Bewertung.
-- `privacy-paranoid` — alles + Telemetrie/Sync/Siri aus.
-
-## Inhalt
-
-| Datei | Zweck |
+| Klasse | Beispiele |
 |---|---|
-| `SKILL.md` | Hauptkatalog mit Prozedur, Tailwind-Catalog, Sicherheitsrules, Recovery. |
-| `scripts/01-inventory.sh` | Read-only Inventur-Scan. |
-| `scripts/02-devcache-cleanup.sh` | 100% reversible Dev-Caches wegputzen. |
-| `scripts/03-launchagent-cleanup.sh` | Interaktive Bestellung pro LaunchAgent. |
-| `scripts/04-system-services-disable.sh` | Druckt sudo-Befehle (User kopiert selbst). |
-| `scripts/05-chrome-memory-saver.sh` | Chrome-Prefs: Memory Saver AN, Energy Saver AUS. |
-| `scripts/06-undo-all.sh` | Reverse-Befehle für alles. |
-| `scripts/07-master-flow.sh` | Orchestrator (alle 7 Schritte). |
-| `scripts/08-deep-cleanup.sh` | **NEU v0.2** — SavedState, Logs, Fonts, Notification-DB, Personal-Apps, sudo-Vorschläge für §15 Hidden-Subsystems. |
+| **A · Apple System-Cruft** | Spotlight, photoanalysisd, Time Machine, Telemetrie, iCloud Sync, Siri |
+| **B · Third-Party Update-Agents** | Adobe ARM/ARMDC, Google Keystone, Microsoft AutoUpdater, JetBrains Toolbox, Epic, MEGA, AWS CodeWhisperer, NotebookLM |
+| **C · Antivirus/Crypto** | TotalAV, Avast, Norton (Free-Versionen = kein echter Schutz). Grass (`io.getgrass.desktop`), IP Royal Paws |
+| **D · Dev-Caches** | npm, pnpm, yarn, bun, pip, conda, Rust toolchain via `rustup cache`, Go build cache, Composer, ms-playwright, … |
+| **E · Browser-Caches** | Chrome Profile-Caches (Logins bleiben erhalten!), Firefox, Brave, Edge |
+| **F · Hidden Apple Subsystems** | `coreduetd` (Handoff), `sharingd` (AirDrop), `usbmuxd` (USB-Tether), `cupsd` (Printing), `symptomsd` (Apple-Reports), `feedbacklogger`, `accessoryupdaterd` (AirPods-FW), `ondeviceassistantd` (Siri on-device), `amsaccountsd` |
+| **G · Specialty-Caches** | Saved Application State (Slack/Discord/VSCode-Saves, 1–5 GB!), Logs >30 Tage, Notification-DB, Personal-App-Caches (Spotify/WhatsApp/Zoom/Telegram), FCP-Workflow, Minecraft-Webcache |
 
-## Verwendung als opencode-Skill
+## Profile (4 vom Agent auswählbar)
 
-**Repo local clonen + in `opencode.json` aufnehmen:**
+| Profil | Use-Case | Was wird genommen |
+|---|---|---|
+| `developer-minimal` | Nur Browser + 1 Editor + Terminal. | Alles außer Browser & 1 Editor. Kein Photos, kein Mail, kein iCloud. |
+| `developer` | Programmierer-Setup. | Apple-Bloat + Update-Agents + Dev-Caches. |
+| `power-user` | bewusste Nutzung einzelner Dienste. | offensichtlicher Müll + AV (Free) + Update-Agents. iCloud nur auf Confirm. |
+| `privacy-paranoid` | Anti-Tracking durch Apple. | alles + Telemetrie/Sync/Siri/iCloud/Analytics aus. |
+
+## Quick Start
+
+### 1 · Repo local clonen
 
 ```bash
 git clone https://github.com/OpenSIN-Code/macos-cool ~/dev/macos-cool
 ```
 
-In `~/.config/opencode/opencode.json` (oder Project-`opencode.json`):
+### 2 · in `opencode.json` einbinden
+
+**Option A · global** (`~/.config/opencode/opencode.json`):
 
 ```json
 {
@@ -50,40 +45,114 @@ In `~/.config/opencode/opencode.json` (oder Project-`opencode.json`):
 }
 ```
 
-Anschließend opencode neu starten.
+**Option B · pro Projekt** (`<project>/opencode.json` im Worktree-Root):
 
-## Verwendung als claude-code-Skill
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "skills": {
+    "paths": ["~/dev/macos-cool"]
+  }
+}
+```
+
+**Option C · per URL (kein lokaler Clone nötig)**:
+
+```json
+{
+  "skills": {
+    "urls": ["https://raw.githubusercontent.com/OpenSIN-Code/macos-cool/main/SKILL.md"]
+  }
+}
+```
+
+### 3 · opencode neu starten
+
+Config wird beim Start geladen, nicht hot-reloaded. Siehe SKILL.md §„Applying changes".
+
+### 4 · Skill auslösen
+
+Der Skill matcht auf Trigger-Keywords. Ein paar Beispiele:
+
+- „Mac ist lahm" / „warum 28 Load Avg"
+- „Spotlight wütet" / „fotoanalyse aus"
+- „Time Machine sichert und ich will das nicht"
+- „Adobe Helper löschen" / „jetbrains weg" / „megas updater weg" / „antivirus müll"
+- „grass ist dreck" / „notebooklm daily aus"
+- „wie deaktiviere ich Spotlight"
+- „Developer-Mini-Profile"
+- „macos-cool" / „macos cool machen"
+- „bloat entfernen"
+
+## Scripts im Repo
+
+| Skript | Zweck |
+|---|---|
+| `scripts/01-inventory.sh` | Read-only Inventur-Scan. |
+| `scripts/02-devcache-cleanup.sh` | 100 % reversible Dev-Caches (`npm`, `pnpm`, `pip`, `Cargo`, …). |
+| `scripts/03-launchagent-cleanup.sh` | Interaktive Bestätigung pro LaunchAgent (~30 Einträge). |
+| `scripts/04-system-services-disable.sh` | Druckt sudo-Befehle (User kopiert in Terminal). |
+| `scripts/05-chrome-memory-saver.sh` | Schreibt `performance.memory_saver_mode.enabled=true`, `energy_saver_mode.enabled=false` in alle Chrome-Profile-Prefs. |
+| `scripts/06-undo-all.sh` | Reverse-Befehle für alles (Spotlight, photoanalysisd, TM, …). |
+| `scripts/07-master-flow.sh` | Orchestrator mit 7 Steps. |
+| `scripts/08-deep-cleanup.sh` | **v0.2** — SavedState-Sweep, Logs >30 Tage, Notification-DB, Personal-App-Cache, Font/QuickLook. |
+| `scripts/09-specialty-cleanup.sh` | **v0.3** — PDF/OCR, AirPort-Legacy, Mail-Plugins, Thunderbolt/eGPU, FCP, Minecraft. |
+
+## Manual aus dem Terminal
+
+```bash
+cd ~/dev/macos-cool
+
+# 1. Inventur
+bash scripts/01-inventory.sh developer            # profile = developer|developer-minimal|power-user|privacy-paranoid
+
+# 2. Dev-Caches (Vorschau / Bestätigung)
+bash scripts/02-devcache-cleanup.sh --dry-run
+bash scripts/02-devcache-cleanup.sh --yes
+
+# 3. LaunchAgents (Step-by-Step oder Auto)
+bash scripts/03-launchagent-cleanup.sh
+bash scripts/03-launchagent-cleanup.sh --auto --yes
+
+# 4. System-Services (sudo)
+bash scripts/04-system-services-disable.sh
+
+# 5. Chrome (Chrome vorher schliessen!)
+osascript -e 'tell application "Google Chrome" to quit'
+bash scripts/05-chrome-memory-saver.sh
+open -a "Google Chrome"
+
+# 6. Master Flow
+bash scripts/07-master-flow.sh --profile=developer --auto
+```
+
+## Verwendung in claude-code
 
 ```bash
 git clone https://github.com/OpenSIN-Code/macos-cool ~/dev/macos-cool
-ln -s ~/dev/macos-cool ~/.claude/skills/macos-cool
+ln -s ~/dev/macos-cool ~/.claude/skills/macos-cool          # symlink
+# requires SKILL.md at root — it is. Done.
+
+# Hardlink oder echter Clone in ~/.claude/skills/macos-cool:
+mkdir -p ~/.claude/skills && cp -R ~/dev/macos-cool ~/.claude/skills/macos-cool
 ```
 
-## Manuell aus dem Terminal
+## Versionen — Versions-Historie
 
-```bash
-# 1. Inventur
-bash scripts/01-inventory.sh developer
+- **v0.1** — Initial: Catalog Classes A–E + 7 Scripts.
+- **v0.2** — Class F (Hidden Apple Subsystems) + State/Logs/PersonalApps/Notification/pmset (§15–§21) + script `08-deep-cleanup.sh`.
+- **v0.3** — `pmset` Detail (§23) + 6 Specialty-Caches (§24: PDF/OCR, AirPort, Mail-Plugins, Thunderbolt/eGPU, FCP, Minecraft) + script `09-specialty-cleanup.sh`.
 
-# 2. Dev-Caches (reversibel)
-bash scripts/02-devcache-cleanup.sh --dry-run   # Vorschau
-bash scripts/02-devcache-cleanup.sh --yes       # mit Confirm-Loop
+## Lizenz
 
-# 3. LaunchAgents (interaktiv pro Item)
-bash scripts/03-launchagent-cleanup.sh
-# oder:
-bash scripts/03-launchagent-cleanup.sh --auto --yes
+MIT — Issues / PRs willkommen auf <https://github.com/OpenSIN-Code/macos-cool>.
 
-# 4. System-Services (gibt sudo-Befehle aus)
-bash scripts/04-system-services-disable.sh
+## Mitmachen
 
-# 5. Chrome (Chrome muss zu sein)
-bash scripts/05-chrome-memory-saver.sh
+Issues mit Repro-Steps:
+- macOS-Version + Build-Nummer (`sw_vers`)
+- Hardware (Modell + RAM)
+- `bash scripts/01-inventory.sh <profile>` Output
+- Welche Schritte, welche Effekte
 
-# 6. master (alle Schritte)
-bash scripts/07-master-flow.sh --profile=developer
-```
-
-## License
-
-MIT. Issues / PRs willkommen.
+PRs: bitte Repro + Vorher-/Nachher-Diagnose anhängen.
