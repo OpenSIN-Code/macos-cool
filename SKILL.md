@@ -1063,3 +1063,133 @@ Das neue Skript `scripts/08-deep-cleanup.sh` orchestriert §15–§21:
 | 8 | sudo-Befehls-Block für §15 (Hidden-Subsystems-Disable) |
 
 ---
+
+## 23 · `pmset`-Tuning im Detail — neu in v0.3
+
+`pmset` steuert Apples Power-Management. Relevant für Speicher/Leistung/Akku:
+
+### 23.1 Standard-Schalter
+
+| Befehl | Was ändert |
+|---|---|
+| `pmset -g` | Aktueller Stand (lesen) |
+| `pmset -g assertions` | Welche Prozesse/Services gerade „NoSleep" halten |
+| `pmset -g history` | Sleep/Wake-History |
+
+### 23.2 Tuning-Schalter
+
+| Befehl | Wirkung | Verlust |
+|---|---|---|
+| `sudo pmset -womp 0` | Wake-on-LAN aus. Mac wird nicht mehr per Ethernet-Packet geweckt. | Remote-Mgmt in Enterprise-Setups. |
+| `sudo pmset -powernap 0` | Power Nap aus. Kein Hintergrund-Mail/Calendar/Photos-Sync während Sleep. | Sleep-Push für Notifications weg. |
+| `sudo pmset -networkreachabilityoff 1` | Kein Wake wegen „Netzwerk erreichbar"? Bonjour-Lookups, TM-Wake. | Net-Lookup-Pings wach nicht. |
+| `sudo pmset -standbydelay 43200` | Standby-Verzögerung 12h statt 1h. | Nachteil keiner. |
+| `sudo pmset -autopoweroff 0` | Auto-Hard-PowerOff nach längerem Sleep deaktivieren. | Akku-Schutz-Verhalten weg. |
+| `sudo pmset displaysleep 10 disksleep 15 sleep 20` | aggressivere Sleep-Timer. | Display geht schneller aus. |
+| `pmset displaysleepnow` | Display sofort aus. | Sofort-Standby. |
+
+### 23.3 Diagnose-Check
+
+```bash
+# Was hindert deinen Mac am Schlafen?
+pmset -g assertions
+
+# Letzte Sleep/Wake-Events:
+pmset -g history | tail -20
+
+# Volle Config:
+pmset -g custom
+```
+
+### 23.4 Hot-Spot-Check (iPhone via WLAN ist OK)
+
+```bash
+# Wer iPhone-Hotspot via WLAN = kein usbmuxd nötig
+# Nur USB-CABLE-Tethering braucht usbmuxd.
+
+# Sicherheits-Check, ob USB-Tethering läuft:
+ps aux | grep -iE "usbmux|iphoned" | grep -v grep
+# Wenn nichts = Wifi-Hotspot in use → usbmuxd kann sterben.
+```
+
+---
+
+## 24 · Erweiterte Hidden-Bloat-Pfade — neu in v0.3
+
+Detaillierte Aufschlüsselung einiger Spezial-Caches, die wir in §16-§21 nur gestreift haben.
+
+### 24.1 `com.apple.AppleQMasterOpen*` — PDF/TIFF OCR + Quick Look Caches
+
+| | |
+|---|---|
+| Was | Apples **Quick Look** cached a) Thumbnails für PDF/TIFF/JPG-Dateien, b) OCR-Text für durchsuchbare Dokumente. |
+| Pfad A | `~/Library/Caches/com.apple.QuickLook.thumbnailcache/` |
+| Pfad B | `~/Library/Caches/com.apple.quicklook.*` |
+| Pfad C | `/var/folders/$$/C/com.apple.QuickLook.*` (User-PER-Var-Folder) |
+| Cleaning-Cache-only (sicher) | `qlmanage -r` (Quick-Look-Cache komplett reinitialisieren) |
+| Hard-Clean | `rm -rf ~/Library/Caches/com.apple.QuickLook.* && rm -rf /var/folders/*/*/C/com.apple.QuickLook.*`  |
+| Risiko | Niedrig. Quick Look rendert beim nächsten Öffnen neu. Nicht in Mail-Attachments angefasst. |
+
+### 24.2 `com.apple.AirPortPrefsUpdater` — AirPort-Legacy Updater
+
+| | |
+|---|---|
+| Was | Apples **Legacy-Wi-Fi Preferences-Updater** aus alter „AirPort"-Welt (vor 2016, vor macOS-Sierra). |
+| Realität | macOS-Sierra+ nutzt `IO80211`-Familie. `AirPortPrefsUpdater` ist DEAD-CODE für Wi-Fi-Profile (legacy 802.11b-only Networks). |
+| Pfad | `/Library/LaunchAgents/com.apple.AirPortPrefsUpdater.plist` (root-owned) |
+| Cleanup | `sudo rm -f /Library/LaunchAgents/com.apple.AirPortPrefsUpdater.plist` |
+| Risiko | Sehr niedrig. Falls Problem: in Recovery-Mode reinstall mit `csrutil disable` — nicht zu empfehlen — oder einfach Datei neu anlegen aus `defaults`. |
+
+### 24.3 Mail-Plugin-Caches
+
+| | |
+|---|---|
+| Was | Mail.app lädt Plugins via **LSPlugins** (LoadablePlugins). Caches für Plugin-Compilation, Crash-Logs. |
+| Pfad | `~/Library/Containers/com.apple.mail/Data/Library/Caches/Library/Application Support/com.apple.Mail/` |
+| ⚠️ NICHT anfassen | `/Library/Mail/Bundles/` (Plugin-Bundles selbst), `~/Library/Mail/V*/MailData/` (Account-Message-Store), `~/Library/Containers/com.apple.mail/Data/Library/Mail/` |
+| Safe-Cache-Clean | `rm -rf ~/Library/Containers/com.apple.mail/Data/Library/Caches/Library/Application\ Support/com.apple.Mail/Library/Caches/com.apple.Mail.LSPlugins` |
+
+### 24.4 `com.apple.thunderboltSettings` — eGPU/Thunderbolt-Daemon
+
+| | |
+|---|---|
+| Was | Apples **Thunderbolt-Daemon**. Enumeriert Thunderbolt-Bus, tunnelt PCIe-Zugriffe für eGPU-Bridges. Lädt FW-Updates. |
+| Pfad | `/System/Library/LaunchDaemons/com.apple.thunderboltSettings.plist` (SIP-geschützt) |
+| Wann behalten | Du nutzt eine **eGPU** (Razer Core, Mantiz, Sapphire, ...) oder ein echtes Thunderbolt-Dock |
+| Wann kann weg | Nur USB-C-Sticks/Displays — kein vollwertiger Thunderbolt-Hub |
+| Disable | `sudo launchctl disable system/com.apple.thunderboltSettings` |
+| Risiko | ⚠️ Manchmal USB-C-Hub-Aufzählung temporär gestört. Bei nicht-eGPU-System: akzeptabel. |
+
+### 24.5 FCP-Workflow-Caches (Final Cut Pro)
+
+| | |
+|---|---|
+| Was | **Final Cut Pro** schreibt: a) Proxy-Videos für 4K, b) Optimized-Media, c) Intelligent-Assistance-Modelle. |
+| Pfad | `~/Movies/Final Cut Pro.fcpbundle/Library/Caches/` |
+| Pfad 2 | `~/Library/Application Support/com.apple.FinalCutPro/Library/Caches/` |
+| Typische Größe | 5–50 GB wenn viele Proxies aktiv |
+| Cleanup (safe-cache only) | `rm -rf ~/Movies/Final\ Cut\ Pro.fcpbundle/Library/Caches/` |
+| ⚠️ KEINESFALLS | `~/Movies/Final Cut Pro.fcpbundle/CurrentVersion.fcpevent/` (Library-DB!), `Original Media/`, `Render Files/` (dein „unfertiger Content") |
+
+### 24.6 Minecraft-Realm-Autoupdater
+
+| | |
+|---|---|
+| Was | **Minecraft-Bedrock (Store-bundle)** installiert einen Helper-LaunchAgent für Realm-Sync und MS-Account-Status-Check. **Java-Edition** hat eigenen Launcher. |
+| BearEdition Pfad 1 | `~/Library/LaunchAgents/com.apple.Minecraft*` (selten) |
+| Java-Edition Pfad | `~/Library/Application Support/minecraft/webcache/`, `~/Library/Caches/mojang-launcher/` |
+| Cache-Größe | Modpack-Webcache 1–3 GB, Java-Laufzeit-Cache 500 MB |
+| Cleanup (safe Cache) | `rm -rf ~/Library/Application\ Support/minecraft/webcache/` |
+| ⚠️ Welten NICHT löschen | `~/.minecraft/saves/` (deine Welten!), `~/.minecraft/realm/`, `~/.minecraft/servers.dat` |
+
+---
+
+## 25 · Skript-Erweiterung: `09-specialty-cleanup.sh` — neu in v0.3
+
+Das Skript `scripts/09-specialty-cleanup.sh` orchestriert §23.4 bis §24 — spezialisierte Bloat-Catalog-Pfade mit Confirm pro Item und sauberer Risiko-Klassifikation.
+
+Wird in v0.3 beigefügt.
+
+---
+
+---
