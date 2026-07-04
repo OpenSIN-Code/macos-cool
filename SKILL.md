@@ -708,6 +708,358 @@ sudo iotop -C 5 2   # falls installiert; sonst `fs_usage`
 ## 14 · Versions-Historie
 
 - **v0.1** (2026-07-04) — Initial Cut, basierend auf OpenCode-Session beim User `Delqhi`. 47 Bloat-Categories, 4 Profile, 12 Scripts.
-- TODO v0.2: mas-cli integration
-- TODO v0.3: Valve Steam auto-prune
-- TODO v0.4: Profile-Test-Suite
+- **v0.2** (2026-07-04) — Added §15–§21 (Hidden-Apple-Subsystems, SavedState, Logs, pmset, Personal-Apps). Added script `08-deep-cleanup.sh`.
+- TODO v0.3: mas-cli integration
+- TODO v0.4: Valve Steam auto-prune
+- TODO v0.5: Profile-Test-Suite
+
+---
+
+## 15 · Hidden Apple Subsystems (Klasse F) — neu in v0.2
+
+Diese Dienste laufen **ab Werk im Hintergrund** und werden von Apple nicht prominent beworben. Viele davon sind harmlos, andere fressen **RAM und Netzwerk** ohne offensichtlichen Grund. Profil-spezifisch ausschalten.
+
+### 15.1 `coreduetd` (Handoff / Continuity / Auto-Unlock Apple Watch)
+
+| | |
+|---|---|
+| Funktion | Handoff zwischen Mac/iPhone/iPad. Universal Clipboard. Continuity Camera. Auto-Unlock mit Apple Watch. Wi-Fi-Handoff. |
+| RAM | 100–300 MB im Idle (über Wochen LEAK → bis 1 GB) |
+| Befehl | `sudo launchctl disable system/com.apple.coreduetd` |
+| Konsequenz | Handoff/Auto-Unlock/Universal Clipboard aus. Continuity Camera tot. |
+| Rückgängig | `sudo launchctl enable system/com.apple.coreduetd` |
+
+> **Diagnose:** `top -l 1 -n 15 | grep coreduetd`. Wenn er da ist und du eh nicht mit Apple-Watch arbeitest ➔ disable.
+
+### 15.2 `sharingd` (AirDrop / SMB / Screen-Share)
+
+| | |
+|---|---|
+| Funktion | AirDrop-Discovery, File-Sharing (SMB), Screen-Sharing-Einladungen, Remote-Login-Events. |
+| Befehl | `sudo launchctl disable system/com.apple.sharingd` |
+| Konsequenz | AirDrop geht nicht. macOS-System-Settings → Sharing leer. |
+| Rückgängig | `sudo launchctl enable system/com.apple.sharingd` |
+
+### 15.3 `usbmuxd` (iPhone-/iPad-Sync)
+
+| | |
+|---|---|
+| Funktion | USB-Mux für iPhone/iPad Sync, Tethering, Apple-Watch-Backup via USB, Audio Routing. |
+| Befehl | `sudo launchctl disable system/com.apple.usbmuxd` |
+| Konsequenz | Finder zeigt iPhone nicht mehr. iPhone-Tethering (Internet-Sharing) tot. Apple-TV-Discovery aus. |
+| Rückgängig | `sudo launchctl enable system/com.apple.usbmuxd` |
+
+> **Nicht disable** wenn du ein iPhone hast und USB-Backups machst!
+
+### 15.4 `cupsd` (Printing)
+
+| | |
+|---|---|
+| Funktion | Print-Spooler + Treiber-Daemon. |
+| Befehl | `sudo launchctl disable system/com.apple.cupsd` |
+| Konsequenz | System-Settings → „Drucker & Scanner" lädt nicht. Drucken nicht mehr möglich (selten im Dev-Setup). |
+| Rückgängig | `sudo launchctl enable system/com.apple.cupsd` |
+
+### 15.5 `blued` (Bluetooth-Daemon)
+
+| | |
+|---|---|
+| Funktion | Bluetooth-Stack, Pairing, HID für Keyboard/Mouse/AirPods. |
+| Befehl | **NICHT einfach `disable`** — Keyboard und Mouse könnten sterben. |
+| Tuning | `sudo defaults write /Library/Preferences/com.apple.Bluetooth BluetoothAutoReconnect -bool false` (auto-reconnect aus). |
+| Tipp | System Settings → Bluetooth → unbenutzte Devices „Forget this Device". |
+
+### 15.6 `locationd` (Location-Services)
+
+| | |
+|---|---|
+| Daemon | `com.apple.locationd` |
+| Tuning | Per-App deaktivieren: System Settings → Privacy & Security → Location Services. |
+| Daemon selbst | braucht macOS (für „Find My"). Nicht disable. |
+
+### 15.7 `searchpartyd` (Bonjour LAN-Discovery)
+
+| | |
+|---|---|
+| Funktion | Mac-zu-Mac-LAN-Search (Finder-Bonjour-Browser). |
+| Befehl | `sudo launchctl disable system/com.apple.searchpartyd` |
+| Konsequenz | Sidebar → Network zeigt keine Macs mehr. |
+
+### 15.8 `applepushserviced` (Push für iMessage / Mail / Calendar / WhatsApp …)
+
+| | |
+|---|---|
+| Funktion | Push-Notification-Inbox für alle Push-fähigen Apps. |
+| RAM | 200–500 MB wenn viele Push-Apps aktiv. |
+| Befehl | **Vorsicht:** `sudo launchctl disable system/com.apple.applepushserviced` → KEIN iMessage/Mail-Push, KEIN Calendar-Erinnerungen, KEIN WhatsApp-Push. |
+| Empfehlung | Bei `developer-minimal`-Profil disablemn. |
+
+### 15.9 `symptomsd` (Network-Diagnose → Apple)
+
+| | |
+|---|---|
+| Funktion | Sendet periodisch Network-Reports an Apple. |
+| Befehl | `sudo launchctl disable system/com.apple.symptomsd` |
+| Konsequenz | Kein Auto-Report mehr bei Verbindungsproblemen. Kein direkter User-Nachteil. |
+
+### 15.10 `feedbacklogger` (Feedback-Datensammler)
+
+| | |
+|---|---|
+| Funktion | Sammelt System-Logs wenn „Sende Feedback an Apple" gedrückt wird. |
+| Befehl | `sudo launchctl disable system/com.apple.feedbacklogger` |
+| Konsequenz | "Send Feedback to Apple" in System-Settings tut nichts mehr. |
+
+### 15.11 `accessoryupdaterd` (AirPods / Watch / Pencil Firmware-Updates)
+
+| | |
+|---|---|
+| Funktion | Lädt periodisch Firmware-Updates für Apple-Accessoires. |
+| Befehl | `sudo launchctl disable system/com.apple.accessoryupdaterd` |
+| Konsequenz | Apple-Watch/AirPods updaten sich nicht mehr automatisch via Mac. iPhone macht es weiterhin. |
+
+### 15.12 `ondeviceassistantd` (Siri on-device)
+
+| | |
+|---|---|
+| Funktion | Lokale Siri-Speech-Recognition (Siri-Pitch-Erkennung, Suggestion-Ranking). |
+| Befehl | `sudo launchctl disable system/com.apple.ondeviceassistantd` |
+| Konsequenz | Siri-Quality-Erkennung wird schlechter. AI-Suggestions schlechter. |
+
+### 15.13 `distnoted` / `usernoted`
+
+| | |
+|---|---|
+| Funktion | Notifications-Distribution. |
+| Wichtig | **NICHT abschalten** — System-Notification-UI hängt davon ab. (Falsche Vorgänger-Empfehlungen online.) |
+
+### 15.14 Weitere Mikro-Bloat-Dienste (meist harmlos aber nennenswert)
+
+- `com.apple.amsaccountsd` — Apple-Music-Accountancy (oft RAM-Kleptomane)
+- `com.apple.autofsd` — AutoFS-Service (SMB-Filesystem-DriveAuto)
+- `com.apple.findmydeviced` — „Find My" Background-Sync
+- `com.apple.icloud.findmydeviced` — gleich (iCloud-Variante)
+- `com.apple.networkserviceproxy` — VPN-Profil-Service
+- `com.apple.nsurlsessiond` — Background-Upload/Download (Mail-Attachments)
+- `com.apple.replayd` — ReplayKit-Screen-Recording-Background (oft 50 MB)
+
+Diagnose-Tool für diese alle:
+```bash
+ps axc -o pid,comm | sort -k2 | uniq -c | sort -rn | head -30
+```
+
+---
+
+## 16 · Saved Application State (`~/Library/Saved Application State/`) — neu in v0.2
+
+Über Wochen sammelt macOS für **jede App** ihren letzten UI-State. Bei Heavy-Apps wie VSCode, Slack, Discord, Spotify, Notion und allen Electron-Apps **wird das schnell 1–5 GB**.
+
+```bash
+du -sh ~/Library/Saved\ Application\ State/ 2>/dev/null
+ls ~/Library/Saved\ Application\ State/ | head -30
+```
+
+**Heavy-Schwergewichte (von Usern beobachtet):**
+
+| App-State | Typische Größe | OK zu löschen? |
+|---|--:|---|
+| `com.tinyspeck.chatlyio.savedState` (Slack) | 200–700 MB | ✅ ja (App startet ohne UI-State neu) |
+| `com.discordapp.Discord.savedState` | 50–300 MB | ✅ ja |
+| `com.spotify.client.savedState` | 100 MB | ✅ ja |
+| `com.microsoft.VSCode.savedState` | 50–150 MB | ✅ ja (Fenster-Positionen gehen weg) |
+| `com.notion.desktop.savedState` | 30–100 MB | ✅ ja |
+| `com.google.Chrome.savedState` | 100 MB pro Profil | ✅ ja (Tabs nicht betroffen) |
+| `com.electron.*.savedState` (jeder Electron) | 30–200 MB | ✅ ja |
+
+**Cleanup (alle oder selektiv):**
+```bash
+du -sh ~/Library/Saved\ Application\ State/* 2>/dev/null | sort -h | tail -20
+# Nach User-Check:
+rm -rf ~/Library/Saved\ Application\ State/<App>.savedState
+# ODER alle:
+rm -rf ~/Library/Saved\ Application\ State/* 2>/dev/null
+```
+
+> **Kein Datenverlust.** Saved State = nur UI-Position/-Größe. App öffnet nächstes Mal mit Defaults. Bookmarks / Files / Logins bleiben.
+
+---
+
+## 17 · Logs (`~/Library/Logs/`, `/Library/Logs/`) — neu in v0.2
+
+Nach Jahren ‘ner Anwender-Box sind Logs oft 1–10 GB. In `~/Library/Logs/` accumulate Logs von **allen User-Apps** außerhalb des System-Sandboxes.
+
+```bash
+du -sh ~/Library/Logs/
+ls -la ~/Library/Logs/ | head
+```
+
+Cleanup-Policy (Faktor „Zeit"):
+```bash
+# Alles .old > 30 Tage und gz-Logs > 30 Tage weg:
+find ~/Library/Logs -mtime +30 \( -name "*.old" -o -name "*.gz" -o -name "*.log.*.*" \) -delete 2>/dev/null
+find ~/Library/Logs -type f -mtime +180 -delete 2>/dev/null  # agressiver
+```
+
+System-Logs (`/Library/Logs/`):
+```bash
+sudo find /Library/Logs -mtime +30 -name "*.gz" -delete 2>/dev/null
+sudo find /Library/Logs -mtime +180 -type f -delete 2>/dev/null
+```
+
+> Alternativ: `Console.app` → links „System-Log-Reports" → „Now" → kannst einzelne Reports löschen. Aber für 10000 Reports ist `find` schneller.
+
+---
+
+## 18 · Personal-App-Bloat (Klasse G) — neu in v0.2
+
+Diese Apps sind nicht Update-Agenten, aber produzieren massive Cache-/Log-Bloat. Profil-relevant.
+
+| Pfad | Was drin | Typische Größe |
+|---|---|--:|
+| `~/Library/Application Support/Slack/` | Indexed Messages, code-blocks cache | 1–3 GB |
+| `~/Library/Application Support/discord/` | Voice-Messages, video cache | 1–5 GB |
+| `~/Library/Application Support/zoom.us/` | **Logs!!!** | bis 3 GB! |
+| `~/Library/Caches/com.spotify.client/` | Audio cache | 1 GB+ |
+| `~/Library/Caches/com.whatsapp.desktop/` | Multimedia cache | 200–800 MB |
+| `~/Library/Group Containers/EQHXZ8M8AV.ru.keepcoder.Telegram/` | Stickers, Media | 759 MB+ |
+| `~/Library/Application Support/dbeaverData/` | Workspace DB Cache | 200 MB+ |
+| `~/Library/Application Support/Notion/Partitions/` | offline sync DB | bis 3 GB (Datenrisiko!) |
+| `~/Library/Caches/com.operasoftware.Opera/` | Opera cache | 100–300 MB |
+| `~/Library/Application Support/Microsoft/Teams/` | Teams-Cache | 500 MB–2 GB |
+| `~/Library/Caches/com.apple.Safari/` | Safari cache | 100 MB |
+| `~/Library/Caches/com.google.GoogleDriveFS/` | DriveFS-Cache | bis mehrere GB |
+
+**Was ist Cache-only und sicher?** (regeneriert sich automatisch):
+- `~/Library/Caches/com.spotify.client/`
+- `~/Library/Application Support/Slack/Cache/`, `Slack/GPUCache/`
+- `~/Library/Application Support/discord/Cache/`, `discord/Code Cache/`
+- `~/Library/Application Support/zoom.us/logs/` (LOGS, nicht Daten)
+- `~/Library/Caches/com.whatsapp.desktop/`
+- `~/Library/Application Support/zoom.us/**/Cache`
+
+**Was NICHT löschen** (User-Daten):
+- `~/Library/Mail` (siehe §7)
+- `~/Library/Application Support/Notion/Partitions/` (offline Notes)
+- `~/Library/Group Containers/.../WhatsApp.shared/`
+
+Script (angedeutet):
+```bash
+# Personal App Cache-Only Leeren
+for p in \
+  "$HOME/Library/Caches/com.spotify.client" \
+  "$HOME/Library/Application Support/Slack/Cache" \
+  "$HOME/Library/Application Support/Slack/Code Cache" \
+  "$HOME/Library/Application Support/Slack/GPUCache" \
+  "$HOME/Library/Caches/com.whatsapp.desktop" ; do
+  [ -d "$p" ] && find "$p" -depth -delete 2>/dev/null && echo "  $p → WEG"
+done
+```
+
+---
+
+## 19 · Notification DB (`~/Library/UserNotifications/`) — neu in v0.2
+
+Benachrichtigungs-Datenbank kann 100s MB groß werden. Gelegentlich aufräumen:
+
+```bash
+du -sh ~/Library/UserNotifications/ 2>/dev/null
+
+# Schema besichtigen:
+sqlite3 ~/Library/UserNotifications/notifications.db ".tables"
+
+# Alles löschen (hooked wird beim nächsten App-Start neu):
+rm -rf ~/Library/UserNotifications/*
+# ODER (weniger radikal, behält 'register'-tabelle):
+sqlite3 ~/Library/UserNotifications/notifications.db "DELETE FROM record;"
+```
+
+> Achtung: löscht alle UNGELESENEN In-App-Notifications. Manche Apps signalisieren „neue Nachricht" über die DB.
+
+---
+
+## 20 · Power Management (`pmset`) — neu in v0.2
+
+Standard-macOS-MacBook wacht nachts auf, macht Background-Sync, saugt Akku. Tuning:
+
+```bash
+# Aktuell inspizieren
+pmset -g
+
+# Wake-on-LAN aus (Mac wacht nie für Netzwerk-Packete auf)
+sudo pmset -womp 0
+
+# Power Nap aus (kein Background während Sleep)
+sudo pmset -powernap 0
+
+# Network Reachability Wake aus (Time Machine wake)
+sudo pmset -networkreachabilityoff 1
+
+# Auto-Power-Off (Mac schaltet nach 3h Sleep hart aus) – oft unerwartet
+sudo pmset -autopoweroff 0   # oder Standard lassen und höher setzen: sudo pmset -autopoweroffdelay 14400
+
+# Standby-Verzögerung (default 1h → z.B. 12h)
+sudo pmset -standbydelay 43200
+
+# Display Sleep aggressiver
+pmset displaysleepnow
+sudo pmset displaysleep 10        # 10 Min
+sudo pmset disksleep 15            # 15 Min
+sudo pmset sleep 20                # 20 Min
+```
+
+> **Wirkung:** weniger nächtliche Fan-Spikes, weniger Akku-Drain, weniger Random-Wake.
+
+---
+
+## 21 · Login Items, Fonts, QuickLook — neu in v0.2
+
+### 21.1 Login Items (User-AutoLaunch)
+```bash
+# List
+osascript -e 'tell application "System Events" to get name of every login item'
+# Delete:
+for item in "ItemName1" "ItemName2"; do
+  osascript -e "tell application \"System Events\" to delete login item \"$item\""
+done
+```
+
+### 21.2 Font Cache
+```bash
+du -sh ~/Library/Fonts/
+atsutil databases -removeUser    # User-Font-Cache weg
+atsutil databases -remove        # System-Font-Cache weg
+killall cfprefsd                  # oder Restart für Refresh
+```
+
+### 21.3 Quick Look
+```bash
+du -sh ~/Library/Caches/com.apple.QuickLook.*  2>/dev/null
+rm -rf ~/Library/Caches/com.apple.QuickLook.*
+```
+
+### 21.4 Spotlight Plugins (`/Library/Spotlight/`)
+```bash
+sudo du -sh /Library/Spotlight/ 2>/dev/null
+sudo ls /Library/Spotlight/
+# Wer nicht gebraucht wird (z.B. Markdown.qlgenerator wenn du kein Markdown in Quick-Look brauchst):
+# vorsichtig löschen — Spotlight regeneriert nicht automatisch
+```
+
+---
+
+## 22 · `08-deep-cleanup.sh` Cheat-Sheet — neu in v0.2
+
+Das neue Skript `scripts/08-deep-cleanup.sh` orchestriert §15–§21:
+
+| Phase | Aktion |
+|---|---|
+| 1 | `pmset -g` Snapshot + Vorschlag für Wake/PowerNap/Standby-Tuning |
+| 2 | Saved Application State Größe pro Ordner, mit Confirm pro Folder |
+| 3 | Logs Cleanup (alte .gz / .old > 30 Tage) |
+| 4 | Personal App-Cache-Only Leeren (Spotify/Slack/Discord/WhatsApp/Zoom-Logs) |
+| 5 | Notification DB Cleanup (mit Confirm) |
+| 6 | Font-Cache Rebuild Trigger |
+| 7 | QuickLook-Cache weg |
+| 8 | sudo-Befehls-Block für §15 (Hidden-Subsystems-Disable) |
+
+---

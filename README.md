@@ -29,7 +29,8 @@ Der Skill unterstützt 4 Profile (vom Agent zu Beginn ausgewählt):
 | `scripts/04-system-services-disable.sh` | Druckt sudo-Befehle (User kopiert selbst). |
 | `scripts/05-chrome-memory-saver.sh` | Chrome-Prefs: Memory Saver AN, Energy Saver AUS. |
 | `scripts/06-undo-all.sh` | Reverse-Befehle für alles. |
-| `scripts/07-master-flow.sh` | Orchestrator (alle 6 Schritte). |
+| `scripts/07-master-flow.sh` | Orchestrator (alle 7 Schritte). |
+| `scripts/08-deep-cleanup.sh` | **NEU v0.2** — SavedState, Logs, Fonts, Notification-DB, Personal-Apps, sudo-Vorschläge für §15 Hidden-Subsystems. |
 
 ## Verwendung als opencode-Skill
 
