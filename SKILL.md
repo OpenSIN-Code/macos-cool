@@ -710,9 +710,10 @@ sudo iotop -C 5 2   # falls installiert; sonst `fs_usage`
 - **v0.1** (2026-07-04) — Initial Cut, basierend auf OpenCode-Session beim User `Delqhi`. 47 Bloat-Categories, 4 Profile, 12 Scripts.
 - **v0.2** (2026-07-04) — Added §15–§21 (Hidden-Apple-Subsystems, SavedState, Logs, pmset, Personal-Apps). Added script `08-deep-cleanup.sh`.
 - **v0.3** (2026-07-04) — Added §23 (pmset im Detail + iPhone-Hotspot-Check), §24 (6 Specialty-Caches: PDF/OCR, AirPort, Mail-Plugins, Thunderbolt/eGPU, FCP, Minecraft). Added script `09-specialty-cleanup.sh`.
-- TODO v0.4: mas-cli integration
-- TODO v0.5: Valve Steam auto-prune
-- TODO v0.6: Profile-Test-Suite
+- **v0.4** (2026-07-04) — Added §26 (14-Sektionen-Deep-Diagnostic) + script `10-deep-diagnostic.sh`. Added §27 (App-by-App Cleanup Wizard) + script `11-app-catalog-wizard.sh`. 8 Risiko-Klassen, Known-Bloat-Liste, Pro-App-Confirmation.
+- TODO v0.5: mas-cli integration
+- TODO v0.6: Valve Steam auto-prune
+- TODO v0.7: Profile-Test-Suite
 
 ---
 
@@ -1190,6 +1191,118 @@ Detaillierte Aufschlüsselung einiger Spezial-Caches, die wir in §16-§21 nur g
 Das Skript `scripts/09-specialty-cleanup.sh` orchestriert §23.4 bis §24 — spezialisierte Bloat-Catalog-Pfade mit Confirm pro Item und sauberer Risiko-Klassifikation.
 
 Wird in v0.3 beigefügt.
+
+---
+
+## 26 · Komplettes System-Audit (`10-deep-diagnostic.sh`) — neu in v0.4
+
+Für Nutzer, die mehr als nur oberflächliche Cache-Cleanups wollen — **systemweiten Performance- und Speicher-Check** in 14 Kategorien. Die anderen Inventur-Skripte scanen nur Library/Apps; `10-deep-diagnostic.sh` zeigt ALLES auf einmal.
+
+### 26.1 Was wird gescannt (14 Sektionen)
+
+| # | Sektion | Was | Wie |
+|---|---|---|---|
+| 1 | SYSTEM BASIS | macOS-Version, Build, Arch, Kernel, Uptime, RAM/Cores | `sw_vers`, `uname`, `sysctl`, `uptime` |
+| 2 | DISK / APFS / PURGABLE | Volume-Size, Purgable Space, APFS-Snapshots, Container | `df`, `diskutil info`, `tmutil listlocalsnapshots`, `diskutil apfs list` |
+| 3 | LIBRARY/HOME DISK-USE | Top 12 schwerste Ordner in Library + Home | `du -sh \| sort -h` |
+| 4 | MEMORY DETAIL | vm_stat, Mac wired/swapping/compressor, Top-RAM-Hogs mit RES | `vm_stat`, `top`, `ps aux` sortiert nach RAM und VSZ |
+| 5 | CPU / LOAD | Load Avg, Per-Prozess CPU-Credit (cumulative), Top-CPU-Hogs | `top -l`, `ps -Aco pid,time` |
+| 6 | DISK I/O / OPEN FILES | iostat-Throughput, Top-IO nach open-FD-Count via lsof | `iostat`, `lsof` |
+| 7 | POWER / pmset | Sleep-preventing-Assertions, Wake-History | `pmset -g`, `pmset -g assertions`, `pmset -g history` |
+| 8 | LAUNCHD JOBS | Total, Sortierten User-Launch-Daemons/-Agents | `launchctl list`, `ls ~/Library/LaunchAgents` |
+| 9 | SPOTLIGHT/PHOTOANALYSIS | mdworker, mds_stores, mdbulkimport-Status, mdutil-Status | `mdutil -s`, `ps aux \| grep mdworker` |
+| 10 | PRIVACY/TCC | Full-Disk-Access-Apps, Screen-Recording, Microphone | `sqlite3 ~/Library/Application Support/com.apple.TCC/TCC.db` |
+| 11 | NETWORK/Bonjour | Active TCP/IP Connections, mDNSResponder-Traffic | `netstat -an`, `ps aux \| grep mDNSResponder` |
+| 12 | PROCESS FAMILIES | Chrome-Engine-, Electron-, Java-Family-Count + RAM-Sum | `ps aux \| grep -iE "chrome\\\|electron\\\|java\\\|brave"` |
+| 13 | KERNEL EXTENSIONS | Third-party-kexts via kmutil | `kmutil showloaded --no-kernel-components` |
+| 14 | SYSTEM INTEGRITY | SIP (csrutil status), Gatekeeper, FileVault | `csrutil`, `spctl`, `fdesetup` |
+
+### 26.2 Verwendung
+
+```bash
+# Full report - read-only
+bash scripts/10-deep-diagnostic.sh
+
+# JSON für Programmatik
+bash scripts/10-deep-diagnostic.sh --json > /tmp/macstate.json
+```
+
+### 26.3 Output ist nicht-destruktiv
+
+Das Skript liest **ausschließlich**. Es kann zu viel Output geben — pipe nach `tee /tmp/diag-$(date +%F).log` zum Speichern.
+
+---
+
+## 27 · App-by-App Cleanup Wizard (`11-app-catalog-wizard.sh`) — neu in v0.4
+
+Der App-Katalog. Statt pauschal „Speicher freigeben" zeigt dieser Wizard **welche Apps auf deinem Mac installiert sind**, klassifiziert sie nach Risiko, und überlässt **dir** die Entscheidung pro App.
+
+### 27.1 Was läuft
+
+```bash
+bash scripts/11-app-catalog-wizard.sh
+```
+
+Output ist eine Tabelle gruppiert nach Risiko-Klasse, mit folgenden Spalten:
+
+- **APP** — Anzeigename (`Basename /Applications/<App>.app`)
+- **BUNDLE-ID** — Reverse-DNS-Identifier aus `Info.plist`
+- **VERSION** — `CFBundleShortVersionString`
+- **SIZE** — Install-Größe
+
+### 27.2 Risiko-Klassen (8)
+
+| Klasse | Bedeutung | Suggested-Action |
+|---|---|---|
+| **KNOWN-BLOAT** | Antivirus-Fake, Crypto-Miner, alte Spiele, Trash-App | **Komplett** `rm -rf` von `.app` + Support + Caches + Prefs + LaunchAgent + Container |
+| **BROWSER** | Chrome/Brave/Firefox/Edge/Opera/Arc/Safari | `.app` behalten, **§5-Caches** putzen (Logins NICHT) |
+| **DEV-RUNTIME** | Docker, Ollama, AndroidStudio | `.app` behalten, Container-Daten NICHT ohne Confirm |
+| **DEV-TOOL** | Xcode, JetBrains-Produkte, Kiro CLI, iTerm | `.app` behalten, nur Caches putzen |
+| **PRODUCTIVE** | Slack, WhatsApp, Notion, Craft, Spotify | **User fragen** — private Daten enthalten! |
+| **UTILITY** | Hidden Bar, MenubarX, Speedtest, TeraBox, hide.me | **User fragen** — pro App |
+| **APPLE-STOCK** | Safari, Mail, Photos, Notes, Calendar | **KEEP** — OS used |
+| **APPLE-SYSTEM** | Andere Apple-Bundles | **KEEP** — OS-System |
+| **UNKNOWN-APP** | Anwendung mit unklarer Herkunft | **User fragen** — Was ist das? |
+
+### 27.3 Heuristic-Liste der Known-Bloat (Stand v0.4)
+
+```
+TotalAV, Avast, AVG, Norton, Bitdefender, McAfee, Mcafee, Sophos,
+WebCatalog, Wondershare, Filmora, AniEraser,
+iproyal, Pawns, Grass, getgrass, Caracal,
+Honeyminer, Cudo, NiceHash, Salad,
+MEGA, Stronghold-Kingdoms, Genymotion, Nox,
+Parallels, UnrealEditor, Anker, MyCleanMac, MacBooster, CleanMyMac,
+Adobe (Acrobat/Photoshop als Free-Trial),
+JetBrains-Toolbox (wenn IDE weg).
+```
+
+### 27.4 Pro-App-Entscheidungs-Wizard
+
+Wenn der User sagt „lösch TeraBox komplett", baut der Agent folgende Pipeline:
+
+1. **Liste alle Pfade** für die App:
+   - `/Applications/TeraBox.app`
+   - `~/Library/Containers/com.dubox.drive`
+   - `~/Library/Application Support/com.dubox.drive/*`
+   - `~/Library/Application Support/dubox/*`
+   - `~/Library/Caches/com.dubox.drive`
+   - `~/Library/Preferences/com.dubox.drive.plist`
+   - `~/Library/LaunchAgents/*t-eraBox*`
+   - `~/Library/LaunchAgents/*dubox*`
+   - `/Library/LaunchAgents/*dubox*` (root-owned)
+
+2. **PREVIEW-Pass**: `echo` allen `rm -rf` zeigen, NICHT ausführen.
+3. **User-OK** einholen.
+4. **Execute** mit `rm -rf` und `sudo rm` für root-owned Pfade.
+5. **Validation**: neu scannen, App nicht mehr in Tabelle.
+
+### 27.5 Beispiel-Trigger
+
+Im opencode-Chat kann der User sagen:
+- „Welche Apps hab ich?" → Skill führt `11-app-catalog-wizard.sh` aus, zeigt Tabelle.
+- „Lösch TeraBox" → Wizard für genau diese App.
+- „Was soll ich alles löschen?" → Skill empfiehlt basierend auf Known-Bloat-Klasse, wartet auf Confirm.
 
 ---
 

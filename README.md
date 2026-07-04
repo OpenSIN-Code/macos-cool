@@ -97,6 +97,8 @@ Der Skill matcht auf Trigger-Keywords. Ein paar Beispiele:
 | `scripts/07-master-flow.sh` | Orchestrator mit 7 Steps. |
 | `scripts/08-deep-cleanup.sh` | **v0.2** — SavedState-Sweep, Logs >30 Tage, Notification-DB, Personal-App-Cache, Font/QuickLook. |
 | `scripts/09-specialty-cleanup.sh` | **v0.3** — PDF/OCR, AirPort-Legacy, Mail-Plugins, Thunderbolt/eGPU, FCP, Minecraft. |
+| `scripts/10-deep-diagnostic.sh` | **v0.4** — Komplettes System-Audit (14 Sektionen: Disk/Memory/CPU/IO/Power/Network/Privacy/Spotlight/Photoanalysis/APFS/TCC/Kernel-Extensions/Process-Families). |
+| `scripts/11-app-catalog-wizard.sh` | **v0.4** — App-Katalog-Tabelle aller GUI-Apps mit Risiko-Klasse + Suggested-Action. Per-App-Bestätigungs-Wizard. |
 
 ## Manual aus dem Terminal
 
